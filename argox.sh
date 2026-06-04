@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-VERSION='2.0.6-safe1 (2026.04.20, security-hardened)'
+VERSION='2.0.6-safe2-local (2026.04.20, security-hardened, local templates)'
 
 # Github 反代加速代理
 # Safe edition: third-party GitHub proxy disabled to reduce supply-chain risk
@@ -28,7 +28,7 @@ TLS_SERVER='addons.mozilla.org'
 START_PORT_DEFAULT='30000'  # WS/XHTTP 内部端口起始值，各协议在此基础上顺数
 NGINX_PORT_DEFAULT='8080'   # Nginx 默认端口，可交互修改
 CDN_DOMAIN=("skk.moe" "ip.sb" "time.is" "cfip.xxxxxxxx.tk" "bestcf.top" "cdn.2020111.xyz" "xn--b6gac.eu.org" "cf.090227.xyz")
-SUBSCRIBE_TEMPLATE="https://raw.githubusercontent.com/fscarmen/client_template/main"
+SUBSCRIBE_TEMPLATE="LOCAL_EMBEDDED"
 DEFAULT_XRAY_VERSION='26.2.6'
 
 export DEBIAN_FRONTEND=noninteractive
@@ -413,6 +413,128 @@ check_arch() {
   esac
 }
 
+
+# 本地化订阅模板：安全版不再从外部仓库下载 clash / sing-box 模板
+write_local_clash_template() {
+  local _out="$1"
+  cat > "$_out" <<'LOCAL_CLASH_TEMPLATE'
+mixed-port: 7890
+allow-lan: true
+bind-address: '*'
+mode: rule
+log-level: info
+ipv6: true
+external-controller: 127.0.0.1:10000
+
+proxy-providers:
+  NODE_NAME:
+    type: http
+    url: PROXY_PROVIDERS_URL
+    interval: 3600
+    path: ./profiles/NODE_NAME.yaml
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 300
+
+proxy-groups:
+  - name: 节点选择
+    type: select
+    use:
+      - NODE_NAME
+    proxies:
+      - ♻️ 自动选择
+      - DIRECT
+  - name: ♻️ 自动选择
+    type: url-test
+    use:
+      - NODE_NAME
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+  - name: 漏网之鱼
+    type: select
+    use:
+      - NODE_NAME
+    proxies:
+      - 节点选择
+      - ♻️ 自动选择
+      - DIRECT
+
+rules:
+  - GEOIP,LAN,DIRECT
+  - GEOIP,CN,DIRECT
+  - MATCH,漏网之鱼
+LOCAL_CLASH_TEMPLATE
+}
+
+write_local_sing_box_template() {
+  local _out="$1"
+  cat > "$_out" <<'LOCAL_SING_BOX_TEMPLATE'
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true
+    },
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090",
+      "default_mode": "rule"
+    }
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "local",
+        "address": "local"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 7890
+    }
+  ],
+  "outbounds": [
+    "<OUTBOUND_REPLACE>",
+    {
+      "type": "selector",
+      "tag": "Proxy",
+      "outbounds": [
+        "<NODE_REPLACE>",
+        "direct"
+      ]
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rules": [],
+    "final": "Proxy"
+  }
+}
+LOCAL_SING_BOX_TEMPLATE
+}
+
+qrencode_print() {
+  local _data="$1"
+  if [ -x "$WORK_DIR/qrencode" ]; then
+    "$WORK_DIR/qrencode" "$_data" 2>/dev/null || true
+  elif command -v qrencode >/dev/null 2>&1; then
+    qrencode -t ANSIUTF8 "$_data" 2>/dev/null || true
+  else
+    echo "Local QR display unavailable: install package 'qrencode' to show terminal QR code."
+  fi
+}
+
 # 查安装及运行状态，下标0: argo，下标1: xray，下标2: nginx；状态码: 26 未安装， 27 已安装未运行， 28 运行中
 check_install() {
   [ -s $WORK_DIR/nginx.conf ] && IS_NGINX=is_nginx || IS_NGINX=no_nginx
@@ -431,9 +553,8 @@ check_install() {
   fi
 
   {
-    wget --continue -qO $TEMP_DIR/clash ${GH_PROXY}${SUBSCRIBE_TEMPLATE}/clash 2>/dev/null &
-    wget --continue -qO $TEMP_DIR/sing-box ${GH_PROXY}${SUBSCRIBE_TEMPLATE}/sing-box 2>/dev/null &
-    wait
+    write_local_clash_template "$TEMP_DIR/clash"
+    write_local_sing_box_template "$TEMP_DIR/sing-box"
   } &
 
   mapfile -t CURRENT_PROTOCOLS < <(get_installed_protocols)
@@ -441,7 +562,7 @@ check_install() {
   [[ ${STATUS[0]} = "$(text 26)" ]] && [ ! -s $WORK_DIR/cloudflared ] && { wget -qO $TEMP_DIR/cloudflared ${GH_PROXY}https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARGO_ARCH >/dev/null 2>&1 && chmod +x $TEMP_DIR/cloudflared >/dev/null 2>&1; }&
   [[ ${STATUS[1]} = "$(text 26)" ]] && [ ! -s $WORK_DIR/xray ] && { wget -qO $TEMP_DIR/Xray.zip ${GH_PROXY}https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-$XRAY_ARCH.zip >/dev/null 2>&1; unzip -qo $TEMP_DIR/Xray.zip xray *.dat -d $TEMP_DIR >/dev/null 2>&1; }&
   [ ! -s $WORK_DIR/jq ] && { wget --continue -qO $TEMP_DIR/jq ${GH_PROXY}https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-$JQ_ARCH >/dev/null 2>&1 && chmod +x $TEMP_DIR/jq >/dev/null 2>&1; }&
-  [ ! -s $WORK_DIR/qrencode ] && { wget --continue -qO $TEMP_DIR/qrencode ${GH_PROXY}https://github.com/fscarmen/client_template/raw/main/qrencode-go/qrencode-go-linux-$QRENCODE_ARCH >/dev/null 2>&1 && chmod +x $TEMP_DIR/qrencode >/dev/null 2>&1; }&
+  [ ! -s $WORK_DIR/qrencode ] && command -v qrencode >/dev/null 2>&1 && { mkdir -p "$WORK_DIR" >/dev/null 2>&1; ln -sf "$(command -v qrencode)" "$TEMP_DIR/qrencode" >/dev/null 2>&1; }&
 }
 
 # 为了适配 alpine，定义 cmd_systemctl 的函数
@@ -557,65 +678,33 @@ check_system_info() {
 }
 
 # 检测 IPv4 IPv6 信息
+# 安全本地化版：不再访问任何第三方 IP 查询接口。
+# 只读取本机默认网卡地址作为显示/默认值；公网 IP 如需用于直连协议，请在安装交互中手动输入。
 check_system_ip() {
-  [ "$L" = 'C' ] && local IS_CHINESE='?lang=zh-CN'
-  local BIND_ADDRESS4='' BIND_ADDRESS6=''
-  local DEFAULT_LOCAL_INTERFACE4=$(ip -4 route show default | awk '/default/ {for (i=0; i<NF; i++) if ($i=="dev") {print $(i+1); exit}}')
-  local DEFAULT_LOCAL_INTERFACE6=$(ip -6 route show default | awk '/default/ {for (i=0; i<NF; i++) if ($i=="dev") {print $(i+1); exit}}')
-  if [ -n "${DEFAULT_LOCAL_INTERFACE4}${DEFAULT_LOCAL_INTERFACE6}" ]; then
-    local DEFAULT_LOCAL_IP4=$(ip -4 addr show $DEFAULT_LOCAL_INTERFACE4 | sed -n 's#.*inet \([^/]\+\)/[0-9]\+.*global.*#\1#gp')
-    local DEFAULT_LOCAL_IP6=$(ip -6 addr show $DEFAULT_LOCAL_INTERFACE6 | sed -n 's#.*inet6 \([^/]\+\)/[0-9]\+.*global.*#\1#gp')
-    [ -n "$DEFAULT_LOCAL_IP4" ] && local BIND_ADDRESS4="--bind-address=$DEFAULT_LOCAL_IP4"
-    [ -n "$DEFAULT_LOCAL_IP6" ] && local BIND_ADDRESS6="--bind-address=$DEFAULT_LOCAL_IP6"
-  fi
+  local DEFAULT_LOCAL_INTERFACE4 DEFAULT_LOCAL_INTERFACE6 DEFAULT_LOCAL_IP4 DEFAULT_LOCAL_IP6
+  DEFAULT_LOCAL_INTERFACE4=$(ip -4 route show default 2>/dev/null | awk '/default/ {for (i=0; i<NF; i++) if ($i=="dev") {print $(i+1); exit}}')
+  DEFAULT_LOCAL_INTERFACE6=$(ip -6 route show default 2>/dev/null | awk '/default/ {for (i=0; i<NF; i++) if ($i=="dev") {print $(i+1); exit}}')
 
-  {
-    local IP4_JSON=$(wget $BIND_ADDRESS4 -4 -qO- --tries=2 --timeout=2 https://ip.cloudflare.now.cc${IS_CHINESE})
-    [ -n "$IP4_JSON" ] && echo "$IP4_JSON" > $TEMP_DIR/ip4.json
-  }&
+  [ -n "$DEFAULT_LOCAL_INTERFACE4" ] && DEFAULT_LOCAL_IP4=$(ip -4 addr show "$DEFAULT_LOCAL_INTERFACE4" 2>/dev/null | sed -n 's#.*inet \([^/]*\)/[0-9]*.*global.*#\1#gp' | head -1)
+  [ -n "$DEFAULT_LOCAL_INTERFACE6" ] && DEFAULT_LOCAL_IP6=$(ip -6 addr show "$DEFAULT_LOCAL_INTERFACE6" 2>/dev/null | sed -n 's#.*inet6 \([^/]*\)/[0-9]*.*global.*#\1#gp' | head -1)
 
-  {
-    local IP6_JSON=$(wget $BIND_ADDRESS6 -6 -qO- --tries=2 --timeout=2 https://ip.cloudflare.now.cc${IS_CHINESE})
-    [ -n "$IP6_JSON" ] && echo "$IP6_JSON" > $TEMP_DIR/ip6.json
-  }&
+  WAN4=${WAN4:-$DEFAULT_LOCAL_IP4}
+  WAN6=${WAN6:-$DEFAULT_LOCAL_IP6}
+  COUNTRY4=${COUNTRY4:-local}
+  COUNTRY6=${COUNTRY6:-local}
+  ASNORG4=${ASNORG4:-local-only-no-external-ip-query}
+  ASNORG6=${ASNORG6:-local-only-no-external-ip-query}
+  EMOJI4=${EMOJI4:-}
+  EMOJI6=${EMOJI6:-}
 
-  wait
-
-  if [ -s $TEMP_DIR/ip4.json ]; then
-    local IP4_DATA=$(cat $TEMP_DIR/ip4.json)
-    WAN4=$(awk -F '"' '/"ip"/{print $4}' <<< "$IP4_DATA")
-    COUNTRY4=$(awk -F '"' '/"country"/{print $4}' <<< "$IP4_DATA")
-    EMOJI4=$(awk -F '"' '/"emoji"/{print $4}' <<< "$IP4_DATA")
-    ASNORG4=$(awk -F '"' '/"isp"/{print $4}' <<< "$IP4_DATA")
-    rm -f $TEMP_DIR/ip4.json
-  fi
-
-  if [ -s $TEMP_DIR/ip6.json ]; then
-    local IP6_DATA=$(cat $TEMP_DIR/ip6.json)
-    WAN6=$(awk -F '"' '/"ip"/{print $4}' <<< "$IP6_DATA")
-    COUNTRY6=$(awk -F '"' '/"country"/{print $4}' <<< "$IP6_DATA")
-    EMOJI6=$(awk -F '"' '/"emoji"/{print $4}' <<< "$IP6_DATA")
-    ASNORG6=$(awk -F '"' '/"isp"/{print $4}' <<< "$IP6_DATA")
-    rm -f $TEMP_DIR/ip6.json
-  fi
-
-  if grep -qi 'cloudflare' <<< "$ASNORG4$ASNORG6"; then
-    if grep -qi 'cloudflare' <<< "$ASNORG6" && [ -n "$WAN4" ] && ! grep -qi 'cloudflare' <<< "$ASNORG4"; then
-      SERVER_IP_DEFAULT=$WAN4
-    elif grep -qi 'cloudflare' <<< "$ASNORG4" && [ -n "$WAN6" ] && ! grep -qi 'cloudflare' <<< "$ASNORG6"; then
-      SERVER_IP_DEFAULT=$WAN6
-    elif [ -s "$CUSTOM_FILE" ]; then
-      local a=6
-      until [ -n "$SERVER_IP" ]; do
-        ((a--)) || true
-        [ "$a" = 0 ] && error "\n $(text 3) \n"
-        reading "\n $(text 54) " SERVER_IP
-      done
-    fi
+  if [ -n "$SERVER_IP" ]; then
+    SERVER_IP_DEFAULT="$SERVER_IP"
   elif [ -n "$WAN4" ]; then
-    SERVER_IP_DEFAULT=$WAN4
+    SERVER_IP_DEFAULT="$WAN4"
   elif [ -n "$WAN6" ]; then
-    SERVER_IP_DEFAULT=$WAN6
+    SERVER_IP_DEFAULT="$WAN6"
+  else
+    SERVER_IP_DEFAULT=''
   fi
 }
 
@@ -1051,8 +1140,8 @@ check_dependencies() {
   local DEPS_CHECK=() DEPS_INSTALL=() TO_INSTALL=()
 
   # 1. 基础通用依赖 (所有系统都需要)
-  DEPS_CHECK=(  "wget" "bash" "ss"       "nginx" "unzip" "openssl")
-  DEPS_INSTALL=("wget" "bash" "iproute2" "nginx" "unzip" "openssl")
+  DEPS_CHECK=(  "wget" "bash" "ss"       "nginx" "unzip" "openssl" "qrencode")
+  DEPS_INSTALL=("wget" "bash" "iproute2" "nginx" "unzip" "openssl" "qrencode")
 
   # 2. 根据系统差异补充初始化系统依赖（不含防火墙，防火墙仅端口跳跃时按需安装）
   if [ "$SYSTEM" = 'Alpine' ]; then
@@ -3215,7 +3304,8 @@ export_list() {
 
   # 写入订阅文件
   echo -e "$CLASH" > $WORK_DIR/subscribe/proxies
-  wget -qO- --tries=3 --timeout=2 ${SUBSCRIBE_TEMPLATE}/clash | sed "s#NODE_NAME#${NODE_NAME}#g; s#PROXY_PROVIDERS_URL#http://${ARGO_DOMAIN}/${UUID}/proxies#" > $WORK_DIR/subscribe/clash
+  write_local_clash_template "$TEMP_DIR/clash"
+  sed "s#NODE_NAME#${NODE_NAME}#g; s#PROXY_PROVIDERS_URL#http://${ARGO_DOMAIN}/${UUID}/proxies#" "$TEMP_DIR/clash" > $WORK_DIR/subscribe/clash
   echo -n "$SR_SUBSCRIBE" | sed -E '/^[ ]*#|^--/d' | sed '/^$/d' | base64 -w0 > $WORK_DIR/subscribe/shadowrocket
   echo -n "$V2N_SUBSCRIBE" | sed -E '/^[ ]*#|^--/d' | sed '/^$/d' | base64 -w0 > $WORK_DIR/subscribe/base64
 
@@ -3223,8 +3313,8 @@ export_list() {
   local SB_DISPLAY='' SB_BLOCK='' SB_LINK_BLOCK=''
   if ! grep -Eq '^[[:space:]]*(xhttp-h1\.1-cdn|xhttp-h3-direct)[[:space:]]*$' <<< "$PROTOS_NOW" || grep -Eq '(^|[[:space:]])(reality-vision|hysteria2|reality-grpc|vless-ws|vmess-ws|trojan-ws|ss-ws|trojan-direct|ss2022-direct)([[:space:]]|$)' <<< "$PROTOS_NOW"; then
     if [ -n "$SB_OUTBOUNDS" ]; then
-    local SING_BOX_JSON=$(wget -qO- --tries=3 --timeout=2 ${SUBSCRIBE_TEMPLATE}/sing-box)
-    echo "$SING_BOX_JSON" | sed "s#\"<OUTBOUND_REPLACE>\"#${SB_OUTBOUNDS}#; s#\"<NODE_REPLACE>\"#${SB_TAGS}#g" | $WORK_DIR/jq > $WORK_DIR/subscribe/sing-box
+    write_local_sing_box_template "$TEMP_DIR/sing-box"
+    sed "s#\"<OUTBOUND_REPLACE>\"#${SB_OUTBOUNDS}#; s#\"<NODE_REPLACE>\"#${SB_TAGS}#g" "$TEMP_DIR/sing-box" | $WORK_DIR/jq > $WORK_DIR/subscribe/sing-box
     SB_DISPLAY=$(echo "{ \"outbounds\":[ ${SB_OUTBOUNDS} ] }" | $WORK_DIR/jq 2>/dev/null)
     SB_BLOCK="
 *******************************************
@@ -3316,7 +3406,7 @@ ${_SUB_SCHEME}://${ARGO_DOMAIN}/${UUID}/auto
  $(text 64) QRcode:
 Safe edition: online QR service disabled. Use local terminal QR below.")
 
-$($WORK_DIR/qrencode ${_SUB_SCHEME}://${ARGO_DOMAIN}/${UUID}/auto)
+$(qrencode_print ${_SUB_SCHEME}://${ARGO_DOMAIN}/${UUID}/auto)
 "
 
   echo "$EXPORT_LIST_FILE" > $WORK_DIR/list
