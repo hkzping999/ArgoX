@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-VERSION='2.0.6-safe2-local (2026.04.20, security-hardened, local templates)'
+VERSION='2.0.6-safe3-stable (2026.04.20, security-hardened, stable WS default)'
 
 # Github 反代加速代理
 # Safe edition: third-party GitHub proxy disabled to reduce supply-chain risk
@@ -10,6 +10,9 @@ GITHUB_PROXY=()
 # 协议列表和对应的节点标签，顺序必须一一对应
 PROTOCOL_LIST=("VLESS + Reality Vision" "Hysteria2" "VLESS + Reality gRPC" "VLESS + WS" "VMess + WS" "Trojan + WS" "Shadowsocks + WS" "VLESS + XHTTP HTTP/1.1 CDN" "VLESS + XHTTP HTTP/3 Direct" "Trojan Direct" "Shadowsocks 2022 Direct")
 NODE_TAG=(     "reality-vision"         "hysteria2" "reality-grpc"         "vless-ws"   "vmess-ws"   "trojan-ws"   "ss-ws"            "xhttp-h1.1-cdn"             "xhttp-h3-direct"             "trojan-direct" "ss2022-direct")
+# 稳定安全默认协议：仅启用 Argo/trycloudflare 最稳定的 WS + Nginx 链路。
+# 直连类协议（Reality/Hysteria2/XHTTP Direct/Trojan Direct/SS2022）仍可手动选择，但不再默认全选，避免 Xray 因新协议字段兼容性失败。
+STABLE_DEFAULT_PROTOCOLS="e f g h"
 
 # 端口范围限制
 MIN_PORT=100
@@ -798,14 +801,14 @@ xray_variable() {
   for _idx in "${!PROTOCOL_LIST[@]}"; do
     _all_protocol_letters+="$(asc $((98 + _idx))) "
   done
-  read -r -a INSTALL_PROTOCOLS <<< "${_all_protocol_letters% }"
+  read -r -a INSTALL_PROTOCOLS <<< "$STABLE_DEFAULT_PROTOCOLS"
   calc_install_steps
   INSTALL_PROTOCOLS=("${_saved_protocols[@]}")
   # 兼容 config.conf 字符串写法：INSTALL_PROTOCOLS='bcef' → 拆成 (b c e f)
   if [[ "${#INSTALL_PROTOCOLS[@]}" -eq 1 && ! "${INSTALL_PROTOCOLS[0]}" =~ ^[[:space:]]*$ ]]; then
     local _proto_str="${INSTALL_PROTOCOLS[0]}"
     if [[ "$_proto_str" =~ ^[aA]$ ]]; then
-      read -r -a INSTALL_PROTOCOLS <<< "${_all_protocol_letters% }"
+      read -r -a INSTALL_PROTOCOLS <<< "$STABLE_DEFAULT_PROTOCOLS"
     elif [[ "${#_proto_str}" -gt 1 ]]; then
       INSTALL_PROTOCOLS=()
       while IFS= read -r -n1 _ch; do
@@ -829,11 +832,11 @@ xray_variable() {
   if [ -z "${INSTALL_PROTOCOLS[*]}" ]; then
     local MAX_LETTER=$(asc $((97 + ${#PROTOCOL_LIST[@]})))
     if [[ -z "$CHOOSE_PROTOCOLS" || "${CHOOSE_PROTOCOLS,,}" =~ ^a$ ]]; then
-      read -r -a INSTALL_PROTOCOLS <<< "${_all_protocol_letters% }"
+      read -r -a INSTALL_PROTOCOLS <<< "$STABLE_DEFAULT_PROTOCOLS"
     else
       local filtered
       filtered=$(grep -o . <<< "${CHOOSE_PROTOCOLS,,}" | grep -E "^[b-${MAX_LETTER}]$" | awk '!seen[$0]++' | tr -d '\n')
-      [ -z "$filtered" ] && read -r -a INSTALL_PROTOCOLS <<< "${_all_protocol_letters% }" || {
+      [ -z "$filtered" ] && read -r -a INSTALL_PROTOCOLS <<< "$STABLE_DEFAULT_PROTOCOLS" || {
         INSTALL_PROTOCOLS=()
         while IFS= read -r -n1 ch; do
           [ -n "$ch" ] && INSTALL_PROTOCOLS+=("$ch")
@@ -902,6 +905,21 @@ xray_variable() {
     if [[ -n "$ARGO_DOMAIN" && ! "$ARGO_DOMAIN" =~ trycloudflare\.com$ && -z "$ARGO_AUTH" ]]; then
       hint "\n $(text 11)"
       reading "\n $(text 86) " ARGO_AUTH
+    fi
+  fi
+
+  # 稳定版保护：使用临时 trycloudflare.com / 未绑定固定域名时，只保留 WS 系列协议。
+  # Reality/Hysteria2/XHTTP Direct/Trojan Direct/SS2022 Direct 需要直连公网 IP 或固定域名，
+  # 在 Quick Tunnel 场景下容易生成不可用配置，甚至导致 Xray 启动失败。
+  if [[ -z "$ARGO_DOMAIN" || "$ARGO_DOMAIN" =~ trycloudflare\.com$ ]]; then
+    local _stable_filtered=() _p
+    for _p in "${INSTALL_PROTOCOLS[@]}"; do
+      [[ " $_p " =~ ^[[:space:]]*[efgh][[:space:]]*$ ]] && _stable_filtered+=("$_p")
+    done
+    if [ "${#_stable_filtered[@]}" -eq 0 ]; then
+      read -r -a INSTALL_PROTOCOLS <<< "$STABLE_DEFAULT_PROTOCOLS"
+    else
+      INSTALL_PROTOCOLS=("${_stable_filtered[@]}")
     fi
   fi
 
@@ -1071,6 +1089,8 @@ xray_variable() {
     NODE_NAME=${NODE_NAME:-"$HOST_NAME"}
   fi
   grep -q 'noninteractive_install' <<< "$NONINTERACTIVE_INSTALL" || NODE_NAME="${EMOJI_VAL}${EMOJI_VAL:+ }${NODE_NAME}"
+  # 防止主机名或自定义节点名中的引号/反斜杠/控制字符破坏 Xray JSON。
+  NODE_NAME=$(printf '%s' "$NODE_NAME" | tr -d '\r\n\t' | sed 's/["\\]/_/g')
 }
 
 # 快速安装变量初始化
@@ -1080,7 +1100,7 @@ fast_install_variables() {
   for _idx in "${!PROTOCOL_LIST[@]}"; do
     _all_protocol_letters+="$(asc $((98 + _idx))) "
   done
-  read -r -a INSTALL_PROTOCOLS <<< "${_all_protocol_letters% }"
+  read -r -a INSTALL_PROTOCOLS <<< "$STABLE_DEFAULT_PROTOCOLS"
 
   START_PORT=${START_PORT:-"$START_PORT_DEFAULT"}
   for i in "${!INSTALL_PROTOCOLS[@]}"; do
@@ -1133,6 +1153,7 @@ fast_install_variables() {
     local HOST_NAME="ArgoX"
   fi
   NODE_NAME="${EMOJI_VAL}${EMOJI_VAL:+ }${HOST_NAME}"
+  NODE_NAME=$(printf '%s' "$NODE_NAME" | tr -d '\r\n\t' | sed 's/["\\]/_/g')
 }
 
 # 检测并安装依赖，Alpine 额外处理 BusyBox wget 和 openrc，其他系统补充 iproute2 和 systemctl
@@ -2473,7 +2494,7 @@ start_pre() {
     chmod 755 ${WORK_DIR}
     rm -f "\$pidfile"
     if [ -s ${WORK_DIR}/nginx.conf ] && command -v /usr/sbin/nginx >/dev/null 2>&1; then
-        pgrep -f "nginx.*${WORK_DIR}/nginx.conf" >/dev/null 2>&1 || /usr/sbin/nginx -c ${WORK_DIR}/nginx.conf
+        /usr/sbin/nginx -t -c ${WORK_DIR}/nginx.conf >/dev/null 2>&1 && { pgrep -f "nginx.*${WORK_DIR}/nginx.conf" >/dev/null 2>&1 || /usr/sbin/nginx -c ${WORK_DIR}/nginx.conf; } || true
     fi
     return 0
 }
@@ -2533,8 +2554,9 @@ After=network.target
 [Service]
 User=root"
     [[ "$INSTALL_NGINX" != 'n' && "$IS_CENTOS" != 'CentOS7' ]] && XRAY_SERVICE+="
-ExecStartPre=/bin/bash -c 'nginx -c $WORK_DIR/nginx.conf -s reload 2>/dev/null || nginx -c $WORK_DIR/nginx.conf'"
+ExecStartPre=/bin/bash -c 'if [ -s $WORK_DIR/nginx.conf ]; then nginx -t -c $WORK_DIR/nginx.conf >/dev/null 2>&1 && (nginx -c $WORK_DIR/nginx.conf -s reload 2>/dev/null || nginx -c $WORK_DIR/nginx.conf) || true; fi; exit 0'"
     XRAY_SERVICE+="
+ExecStartPre=$WORK_DIR/xray run -test -c $WORK_DIR/inbound.json -c $WORK_DIR/outbound.json
 ExecStart=$WORK_DIR/xray run -c $WORK_DIR/inbound.json -c $WORK_DIR/outbound.json
 Restart=on-failure
 RestartPreventExitStatus=23
@@ -2587,7 +2609,6 @@ WantedBy=multi-user.target"
             "${TLS_SERVER}"
           ],
           "privateKey": "${REALITY_PRIVATE}",
-          "publicKey": "${REALITY_PUBLIC}",
           "shortIds": [
             ""
           ]
@@ -2666,7 +2687,6 @@ JSONEOF
             "${TLS_SERVER}"
           ],
           "privateKey": "${REALITY_PRIVATE}",
-          "publicKey": "${REALITY_PUBLIC}",
           "shortIds": [
             ""
           ]
@@ -2993,12 +3013,7 @@ JSONEOF
   },
   "inbounds": [
 ${INBOUNDS_JSON}
-  ],
-  "dns": {
-    "servers": [
-      "https+local://8.8.8.8/dns-query"
-    ]
-  }
+  ]
 }
 EOF
 
@@ -3011,77 +3026,13 @@ EOF
         },
         {
             "protocol": "blackhole",
-            "settings": {
-
-            },
+            "settings": {},
             "tag": "block"
-        },
-        {
-            "protocol": "wireguard",
-            "tag": "wireguard",
-            "settings": {
-                "secretKey": "YFYOAdbw1bKTHlNNi+aEjBM3BO7unuFC5rOkMRAz9XY=",
-                "address": [
-                    "172.16.0.2/32",
-                    "2606:4700:110:8a36:df92:102a:9602:fa18/128"
-                ],
-                "peers": [
-                    {
-                        "publicKey": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-                        "allowedIPs": [
-                            "0.0.0.0/0",
-                            "::/0"
-                        ],
-                        "endpoint": "engage.cloudflareclient.com:2408"
-                    }
-                ],
-                "reserved": [
-                    78,
-                    135,
-                    76
-                ],
-                "mtu": 1280
-            }
-        },
-        {
-            "protocol": "freedom",
-            "tag": "warp-IPv4",
-            "settings": {
-                "domainStrategy": "UseIPv4"
-            },
-            "proxySettings": {
-                "tag": "wireguard"
-            }
-        },
-        {
-            "protocol": "freedom",
-            "tag": "warp-IPv6",
-            "settings": {
-                "domainStrategy": "UseIPv6"
-            },
-            "proxySettings": {
-                "tag": "wireguard"
-            }
         }
     ],
     "routing": {
         "domainStrategy": "AsIs",
-        "rules": [
-            {
-                "type": "field",
-                "domain": [
-                    "api.openai.com"
-                ],
-                "outboundTag": "${CHAT_GPT_OUT_V4}"
-            },
-            {
-                "type": "field",
-                "domain": [
-                    "geosite:openai"
-                ],
-                "outboundTag": "${CHAT_GPT_OUT_V6}"
-            }
-        ]
+        "rules": []
     }
 }
 EOF
@@ -3720,12 +3671,7 @@ change_protocols() {
     "error": "/dev/null",
     "loglevel": "none"
   },
-  "inbounds": [],
-  "dns": {
-    "servers": [
-      "https+local://8.8.8.8/dns-query"
-    ]
-  }
+  "inbounds": []
 }
 EOF
 
@@ -3741,8 +3687,8 @@ EOF
       xhttp-h3-direct) NEW_BLOCK="{\"tag\":\"${NODE_NAME} ${NODE_TAG[8]}\",\"port\":${XHTTP_PORT},\"protocol\":\"vless\",\"settings\":{\"clients\":[{\"id\":\"${UUID}\"}],\"decryption\":\"none\"},\"streamSettings\":{\"network\":\"xhttp\",\"security\":\"tls\",\"xhttpSettings\":{\"mode\":\"stream-up\",\"extra\":{\"alpn\":[\"h3\"]},\"path\":\"/${WS_PATH}-xh3\"},\"tlsSettings\":{\"serverName\":\"${TLS_SERVER}\",\"alpn\":[\"h3\"],\"certificates\":[{\"certificateFile\":\"${WORK_DIR}/cert/cert.pem\",\"keyFile\":\"${WORK_DIR}/cert/private.key\"}]}},\"sniffing\":{\"enabled\":true,\"destOverride\":[\"http\",\"tls\",\"quic\"]}}" ;;
       trojan-direct) NEW_BLOCK="{\"port\":${TROJAN_PORT},\"protocol\":\"trojan\",\"tag\":\"${NODE_NAME} ${NODE_TAG[9]}\",\"settings\":{\"clients\":[{\"password\":\"${UUID}\"}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"tls\",\"tlsSettings\":{\"serverName\":\"${TLS_SERVER}\",\"certificates\":[{\"certificateFile\":\"${WORK_DIR}/cert/cert.pem\",\"keyFile\":\"${WORK_DIR}/cert/private.key\"}]}},\"sniffing\":{\"enabled\":true,\"destOverride\":[\"http\",\"tls\",\"quic\"],\"metadataOnly\":false}}" ;;
       ss2022-direct) NEW_BLOCK="{\"port\":${SS2022_PORT},\"protocol\":\"shadowsocks\",\"tag\":\"${NODE_NAME} ${NODE_TAG[10]}\",\"settings\":{\"method\":\"2022-blake3-aes-128-gcm\",\"password\":\"${SS2022_PASSWORD}\",\"network\":\"tcp,udp\"},\"sniffing\":{\"enabled\":true,\"destOverride\":[\"http\",\"tls\",\"quic\"],\"metadataOnly\":false}}" ;;
-      reality-vision) NEW_BLOCK="{\"tag\":\"${NODE_NAME} ${NODE_TAG[0]}\",\"protocol\":\"vless\",\"port\":${REALITY_PORT},\"settings\":{\"clients\":[{\"id\":\"${UUID}\",\"flow\":\"xtls-rprx-vision\"}],\"decryption\":\"none\"},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"reality\",\"realitySettings\":{\"show\":false,\"dest\":\"${TLS_SERVER}:443\",\"xver\":0,\"serverNames\":[\"${TLS_SERVER}\"],\"privateKey\":\"${REALITY_PRIVATE}\",\"publicKey\":\"${REALITY_PUBLIC}\",\"shortIds\":[\"\"]}},\"sniffing\":{\"enabled\":true,\"destOverride\":[\"http\",\"tls\"]}}" ;;
-      reality-grpc) NEW_BLOCK="{\"port\":${GRPC_PORT},\"protocol\":\"vless\",\"tag\":\"${NODE_NAME} ${NODE_TAG[2]}\",\"settings\":{\"clients\":[{\"id\":\"${UUID}\",\"flow\":\"\"}],\"decryption\":\"none\"},\"streamSettings\":{\"network\":\"grpc\",\"security\":\"reality\",\"realitySettings\":{\"show\":false,\"dest\":\"${TLS_SERVER}:443\",\"xver\":0,\"serverNames\":[\"${TLS_SERVER}\"],\"privateKey\":\"${REALITY_PRIVATE}\",\"publicKey\":\"${REALITY_PUBLIC}\",\"shortIds\":[\"\"]},\"grpcSettings\":{\"serviceName\":\"grpc\",\"multiMode\":true}},\"sniffing\":{\"enabled\":true,\"destOverride\":[\"http\",\"tls\"]}}" ;;
+      reality-vision) NEW_BLOCK="{\"tag\":\"${NODE_NAME} ${NODE_TAG[0]}\",\"protocol\":\"vless\",\"port\":${REALITY_PORT},\"settings\":{\"clients\":[{\"id\":\"${UUID}\",\"flow\":\"xtls-rprx-vision\"}],\"decryption\":\"none\"},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"reality\",\"realitySettings\":{\"show\":false,\"dest\":\"${TLS_SERVER}:443\",\"xver\":0,\"serverNames\":[\"${TLS_SERVER}\"],\"privateKey\":\"${REALITY_PRIVATE}\",\"shortIds\":[\"\"]}},\"sniffing\":{\"enabled\":true,\"destOverride\":[\"http\",\"tls\"]}}" ;;
+      reality-grpc) NEW_BLOCK="{\"port\":${GRPC_PORT},\"protocol\":\"vless\",\"tag\":\"${NODE_NAME} ${NODE_TAG[2]}\",\"settings\":{\"clients\":[{\"id\":\"${UUID}\",\"flow\":\"\"}],\"decryption\":\"none\"},\"streamSettings\":{\"network\":\"grpc\",\"security\":\"reality\",\"realitySettings\":{\"show\":false,\"dest\":\"${TLS_SERVER}:443\",\"xver\":0,\"serverNames\":[\"${TLS_SERVER}\"],\"privateKey\":\"${REALITY_PRIVATE}\",\"shortIds\":[\"\"]},\"grpcSettings\":{\"serviceName\":\"grpc\",\"multiMode\":true}},\"sniffing\":{\"enabled\":true,\"destOverride\":[\"http\",\"tls\"]}}" ;;
     esac
     if [ -n "$NEW_BLOCK" ] && [ -x "$WORK_DIR/jq" ]; then
       $WORK_DIR/jq --argjson block "$NEW_BLOCK" '.inbounds += [$block]' \
