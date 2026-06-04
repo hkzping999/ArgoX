@@ -111,7 +111,7 @@
 ## 交互式运行脚本
 
 ```
-bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/argox/main/argox.sh)
+bash <(wget -qO- https://raw.githubusercontent.com/hkzping999/ArgoX/main/argox.sh)
 ```
 
   | 参数 | 说明 |
