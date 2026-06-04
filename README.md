@@ -7,8 +7,11 @@
 ```
 bash <(wget -qO- https://raw.githubusercontent.com/hkzping999/ArgoX/main/argox.sh)
 ```
-
- 
+```
+wget https://raw.githubusercontent.com/hkzping999/ArgoX/main/argox.sh -O argox.sh
+bash -n argox.sh
+sudo bash argox.sh
+ ```
 /etc/argox                    # 项目主体目录
 ├── subscribe                 # 订阅文件目录
 │   ├── base64                # V2rayN / Nekobox 订阅文件
