@@ -1,0 +1,380 @@
+--- /mnt/data/argox_orig_cmp/ArgoX-main/argox.sh	2026-05-20 06:28:24.000000000 +0000
++++ argox.sh	2026-06-04 13:03:38.364061059 +0000
+@@ -1,10 +1,11 @@
+ #!/usr/bin/env bash
+ 
+ # 当前脚本版本号
+-VERSION='2.0.6 (2026.04.20)'
++VERSION='2.0.6-safe1 (2026.04.20, security-hardened)'
+ 
+ # Github 反代加速代理
+-GITHUB_PROXY=('https://hub.glowp.xyz/' 'https://proxy.vvvv.ee/')
++# Safe edition: third-party GitHub proxy disabled to reduce supply-chain risk
++GITHUB_PROXY=()
+ 
+ # 协议列表和对应的节点标签，顺序必须一一对应
+ PROTOCOL_LIST=("VLESS + Reality Vision" "Hysteria2" "VLESS + Reality gRPC" "VLESS + WS" "VMess + WS" "Trojan + WS" "Shadowsocks + WS" "VLESS + XHTTP HTTP/1.1 CDN" "VLESS + XHTTP HTTP/3 Direct" "Trojan Direct" "Shadowsocks 2022 Direct")
+@@ -45,8 +46,8 @@
+ C[0]="${E[0]}"
+ E[1]="1. Keep XHTTP over CDN on the Nginx reverse-proxy path and let Nginx handle path-based routing; 2. Add Clash Mihomo-compatible XHTTP client output for fixed tunnels in HTTP/1.1 CDN and HTTP/3 direct modes"
+ C[1]="1. 保持 CDN 下的 XHTTP 继续走 Nginx 反代链路，并由 Nginx 负责基于路径的分流; 2. 增加适配 Clash Mihomo 的 XHTTP 客户端输出，在固定隧道下覆盖 HTTP/1.1 CDN 与 HTTP/3 Direct"
+-E[2]="Project to create Argo tunnels and Xray specifically for VPS, detailed:[https://github.com/fscarmen/argox]\n Features:\n\t • Allows the creation of Argo tunnels via Token, Json and ad hoc methods. User can easily obtain the json at https://fscarmen.cloudflare.now.cc .\n\t • Extremely fast installation method, saving users time.\n\t • Support system: Ubuntu, Debian, CentOS, Alpine and Arch Linux 3.\n\t • Support architecture: AMD,ARM and s390x\n"
+-C[2]="本项目专为 VPS 添加 Argo 隧道及 Xray,详细说明: [https://github.com/fscarmen/argox]\n 脚本特点:\n\t • 允许通过 Token, Json 及 临时方式来创建 Argo 隧道,用户通过以下网站轻松获取 json: https://fscarmen.cloudflare.now.cc\n\t • 极速安装方式,大大节省用户时间\n\t • 智能判断操作系统: Ubuntu 、Debian 、CentOS 、Alpine 和 Arch Linux,请务必选择 LTS 系统\n\t • 支持硬件结构类型: AMD 和 ARM\n"
++E[2]="Project to create Argo tunnels and Xray specifically for VPS, detailed:[https://github.com/fscarmen/argox]\n Features:\n\t • Allows the creation of Argo tunnels via Token, Json and ad hoc methods. Safe edition: do not obtain json via third-party websites; use Cloudflare official dashboard only.\n\t • Extremely fast installation method, saving users time.\n\t • Support system: Ubuntu, Debian, CentOS, Alpine and Arch Linux 3.\n\t • Support architecture: AMD,ARM and s390x\n"
++C[2]="本项目专为 VPS 添加 Argo 隧道及 Xray,详细说明: [https://github.com/fscarmen/argox]\n 脚本特点:\n\t • 允许通过 Token, Json 及 临时方式来创建 Argo 隧道,安全版不建议通过第三方网站获取 json，请仅使用 Cloudflare 官方后台生成 Token/Json\n\t • 极速安装方式,大大节省用户时间\n\t • 智能判断操作系统: Ubuntu 、Debian 、CentOS 、Alpine 和 Arch Linux,请务必选择 LTS 系统\n\t • 支持硬件结构类型: AMD 和 ARM\n"
+ E[3]="Input errors up to 5 times.The script is aborted."
+ C[3]="输入错误达5次,脚本退出"
+ E[4]="UUID should be 36 characters, please re-enter (\${a} times remaining)"
+@@ -63,8 +64,8 @@
+ C[9]="升级请按 [y]，默认不升级:"
+ E[10]="\${TOTAL_STEPS:+(\${STEP_NUM}/\${TOTAL_STEPS}) }Please enter Argo Domain (Default is temporary domain if left blank):"
+ C[10]="\${TOTAL_STEPS:+(\${STEP_NUM}/\${TOTAL_STEPS}) }请输入 Argo 域名 (如果没有，可以跳过以使用 Argo 临时域名):"
+-E[11]="Please enter Argo Token, Argo Json or Cloudflare API\n\n [*] Token: Visit https://dash.cloudflare.com/ , Zero Trust > Networks > Connectors > Create a tunnel > Select Cloudflared\n\n [*] Json: Users can easily obtain it through the following website: https://fscarmen.cloudflare.now.cc\n\n [*] Cloudflare API: Visit https://dash.cloudflare.com/profile/api-tokens > Create Token > Create Custom Token > Add the following permissions:\n - Account > Cloudflare One Connectors: cloudflared > Edit\n - Zone > DNS > Edit\n\n - Account Resources: Include > Required Account\n - Zone Resources: Include > Specific zone > Argo Root Domain"
+-C[11]="请输入 Argo Token, Argo Json 或者 Cloudflare API\n\n [*] Token: 访问 https://dash.cloudflare.com/ ，Zero Trust > 网络 > 连接器 > 创建隧道 > 选择 Cloudflared\n\n [*] Json: 用户通过以下网站轻松获取: https://fscarmen.cloudflare.now.cc\n\n [*] Cloudflare API: 访问 https://dash.cloudflare.com/profile/api-tokens > 创建令牌 > 创建自定义令牌 > 添加以下权限:\n - 帐户 > Cloudflare One连接器: Cloudflared > 编辑\n - 区域 > DNS > 编辑\n\n - 帐户资源: 包括 > 所需账户\n - 区域资源: 包括 > 特定区域 > 所需域名"
++E[11]="Please enter Argo Token, Argo Json or Cloudflare API\n\n [*] Token: Visit https://dash.cloudflare.com/ , Zero Trust > Networks > Connectors > Create a tunnel > Select Cloudflared\n\n [*] Json: Safe edition recommends generating it only from the official Cloudflare dashboard\n\n [*] Cloudflare API: Visit https://dash.cloudflare.com/profile/api-tokens > Create Token > Create Custom Token > Add the following permissions:\n - Account > Cloudflare One Connectors: cloudflared > Edit\n - Zone > DNS > Edit\n\n - Account Resources: Include > Required Account\n - Zone Resources: Include > Specific zone > Argo Root Domain"
++C[11]="请输入 Argo Token, Argo Json 或者 Cloudflare API\n\n [*] Token: 访问 https://dash.cloudflare.com/ ，Zero Trust > 网络 > 连接器 > 创建隧道 > 选择 Cloudflared\n\n [*] Json: 安全版建议仅从 Cloudflare 官方后台生成，不使用第三方网站\n\n [*] Cloudflare API: 访问 https://dash.cloudflare.com/profile/api-tokens > 创建令牌 > 创建自定义令牌 > 添加以下权限:\n - 帐户 > Cloudflare One连接器: Cloudflared > 编辑\n - 区域 > DNS > 编辑\n\n - 帐户资源: 包括 > 所需账户\n - 区域资源: 包括 > 特定区域 > 所需域名"
+ E[12]="(\${STEP_NUM}/\${TOTAL_STEPS}) Please enter Xray UUID (Default is \${UUID_DEFAULT}):"
+ C[12]="(\${STEP_NUM}/\${TOTAL_STEPS}) 请输入 Xray UUID (默认为 \${UUID_DEFAULT}):"
+ E[13]="(\${STEP_NUM}/\${TOTAL_STEPS}) Please enter Xray WS Path (Default is \${WS_PATH_DEFAULT}):"
+@@ -211,8 +212,8 @@
+ C[83]="Token 区域资源获取失败，隧道的根域名和 Token 授权的域名不一致，请到 https://dash.cloudflare.com/profile/api-tokens 检查"
+ E[84]="API execution failed. Response: \$RESPONSE"
+ C[84]="执行 API 失败，返回: \$RESPONSE"
+-E[85]="API does not have enough permissions. Please check at https://dash.cloudflare.com/profile/api-tokens\n\n [*] Token: Visit https://dash.cloudflare.com/ , Zero Trust > Networks > Connectors > Create a tunnel > Select Cloudflared\n\n [*] Json: Users can easily obtain it through the following website: https://fscarmen.cloudflare.now.cc\n\n [*] Cloudflare API: Visit https://dash.cloudflare.com/profile/api-tokens > Create Token > Create Custom Token > Add the following permissions:\n - Account > Cloudflare One Connectors: cloudflared > Edit\n - Zone > DNS > Edit\n\n - Account Resources: Include > Required Account\n - Zone Resources: Include > Specific zone > Argo Root Domain"
+-C[85]="API 没有足够权限，请在 https://dash.cloudflare.com/profile/api-tokens 检查 Token 权限配置\n\n [*] Token: 访问 https://dash.cloudflare.com/ ，Zero Trust > 网络 > 连接器 > 创建隧道 > 选择 Cloudflared\n\n [*] Json: 用户通过以下网站轻松获取: https://fscarmen.cloudflare.now.cc\n\n [*] Cloudflare API: 访问 https://dash.cloudflare.com/profile/api-tokens > 创建令牌 > 创建自定义令牌 > 添加以下权限:\n - 帐户 > Cloudflare One连接器: Cloudflared > 编辑\n - 区域 > DNS > 编辑\n\n - 帐户资源: 包括 > 所需账户\n - 区域资源: 包括 > 特定区域 > 所需域名"
++E[85]="API does not have enough permissions. Please check at https://dash.cloudflare.com/profile/api-tokens\n\n [*] Token: Visit https://dash.cloudflare.com/ , Zero Trust > Networks > Connectors > Create a tunnel > Select Cloudflared\n\n [*] Json: Safe edition recommends generating it only from the official Cloudflare dashboard\n\n [*] Cloudflare API: Visit https://dash.cloudflare.com/profile/api-tokens > Create Token > Create Custom Token > Add the following permissions:\n - Account > Cloudflare One Connectors: cloudflared > Edit\n - Zone > DNS > Edit\n\n - Account Resources: Include > Required Account\n - Zone Resources: Include > Specific zone > Argo Root Domain"
++C[85]="API 没有足够权限，请在 https://dash.cloudflare.com/profile/api-tokens 检查 Token 权限配置\n\n [*] Token: 访问 https://dash.cloudflare.com/ ，Zero Trust > 网络 > 连接器 > 创建隧道 > 选择 Cloudflared\n\n [*] Json: 安全版建议仅从 Cloudflare 官方后台生成，不使用第三方网站\n\n [*] Cloudflare API: 访问 https://dash.cloudflare.com/profile/api-tokens > 创建令牌 > 创建自定义令牌 > 添加以下权限:\n - 帐户 > Cloudflare One连接器: Cloudflared > 编辑\n - 区域 > DNS > 编辑\n\n - 帐户资源: 包括 > 所需账户\n - 区域资源: 包括 > 特定区域 > 所需域名"
+ E[86]="Please enter [Token, Json, API] value:"
+ C[86]="请输入 [Token, Json, API] 的值:"
+ E[87]="(\${STEP_NUM}/\${TOTAL_STEPS:-?}) Select protocols to install (e.g. bdf). a = all (default):"
+@@ -337,99 +338,23 @@
+ }
+ 
+ # 检测是否启用 Github CDN
++# Safe edition: third-party CDN/proxy detection is disabled.
+ check_cdn() {
+-  local PROXY CODE PID CMD
+-  local _WAIT_COUNT=120
+-  local PIDS=()
+-  local RAW_URL='https://raw.githubusercontent.com/fscarmen/argox/main/argox.sh'
+-
+-  # 确定下载工具：优先 wget，次选 curl
+-  if command -v wget >/dev/null 2>&1; then
+-    CMD='wget'
+-  elif command -v curl >/dev/null 2>&1; then
+-    CMD='curl'
+-  else
+-    GH_PROXY=''
+-    return
+-  fi
+-
+-  # 获取 HTTP 状态码的函数
+-  get_code() {
+-    local url=$1
+-    if [ "$CMD" = 'wget' ]; then
+-      wget -qT5 -O /dev/null --server-response "$url" 2>&1 | awk '/HTTP\//{code=$2} END{print code}'
+-    else
+-      curl -skL -w "%{http_code}" "$url" -o /dev/null
+-    fi
+-  }
+-
+-  # 直连检测
+-  CODE=$(get_code "$RAW_URL")
+-  if [ "$CODE" = '200' ]; then
+-    GH_PROXY=''
+-    return
+-  fi
+-
+-  # 并发探测代理
+-  for PROXY in "${GITHUB_PROXY[@]}"; do
+-    {
+-      CODE=$(get_code "${PROXY}${RAW_URL}")
+-      [ "$CODE" = '200' ] && [ ! -e "${TEMP_DIR}/cdn_proxy" ] && printf '%s' "$PROXY" > "${TEMP_DIR}/cdn_proxy"
+-    } &
+-    PIDS+=("$!")
+-  done
+-
+-  # 等待探测结果或超时
+-  while [ ! -e "${TEMP_DIR}/cdn_proxy" ] && [ "$_WAIT_COUNT" -gt 0 ]; do
+-    sleep 0.05
+-    (( _WAIT_COUNT-- )) || true
+-  done
+-
+-  [ -e "${TEMP_DIR}/cdn_proxy" ] && GH_PROXY=$(cat "${TEMP_DIR}/cdn_proxy") || GH_PROXY=''
+-
+-  # 清理后台任务和临时文件
+-  for PID in "${PIDS[@]}"; do kill "$PID" >/dev/null 2>&1 || true; done
+-  for PID in "${PIDS[@]}"; do wait "$PID" 2>/dev/null || true; done
+-  rm -f "${TEMP_DIR}/cdn_proxy"
++  GH_PROXY=''
++  return 0
+ }
+ 
+-# 检测是否解锁 chatGPT，以决定是否使用 warp 链式代理或者是 direct out，此处判断改编自 https://github.com/lmc999/RegionRestrictionCheck
++# 检测是否解锁 chatGPT，以决定是否使用 warp 链式代理或者是 direct out
++# Safe edition: disabled external OpenAI/ChatGPT probing to avoid unnecessary outbound requests.
+ check_chatgpt() {
+-  local CHECK_STACK=$1
+-  local UA_BROWSER="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+-  local UA_SEC_CH_UA='"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"'
+-  wget --help | grep -q -- '--ciphers' && local IS_CIPHERS=is_ciphers
+-
+-  local CHECK_RESULT1=$(wget --timeout=2 --tries=2 --retry-connrefused --waitretry=5 ${CHECK_STACK} -qO- --content-on-error --header='authority: api.openai.com' --header='accept: */*' --header='accept-language: en-US,en;q=0.9' --header='authorization: Bearer null' --header='content-type: application/json' --header='origin: https://platform.openai.com' --header='referer: https://platform.openai.com/' --header="sec-ch-ua: ${UA_SEC_CH_UA}" --header='sec-ch-ua-mobile: ?0' --header='sec-ch-ua-platform: "Windows"' --header='sec-fetch-dest: empty' --header='sec-fetch-mode: cors' --header='sec-fetch-site: same-site' --user-agent="${UA_BROWSER}" 'https://api.openai.com/compliance/cookie_requirements')
+-
+-  grep -q "^$" <<< "$CHECK_RESULT1" && grep -qw is_ciphers <<< "$IS_CIPHERS" && local CHECK_RESULT1=$(wget --timeout=2 --tries=2 --retry-connrefused --waitretry=5 ${CHECK_STACK} --ciphers=DEFAULT@SECLEVEL=1 --no-check-certificate -qO- --content-on-error --header='authority: api.openai.com' --header='accept: */*' --header='accept-language: en-US,en;q=0.9' --header='authorization: Bearer null' --header='content-type: application/json' --header='origin: https://platform.openai.com' --header='referer: https://platform.openai.com/' --header="sec-ch-ua: ${UA_SEC_CH_UA}" --header='sec-ch-ua-mobile: ?0' --header='sec-ch-ua-platform: "Windows"' --header='sec-fetch-dest: empty' --header='sec-fetch-mode: cors' --header='sec-fetch-site: same-site' --user-agent="${UA_BROWSER}" 'https://api.openai.com/compliance/cookie_requirements')
+-
+-  if grep -q "^$" <<< "$CHECK_RESULT1" || grep -qi 'unsupported_country' <<< "$CHECK_RESULT1"; then
+-    echo "ban"
+-    return
+-  fi
+-
+-  local CHECK_RESULT2=$(wget --timeout=2 --tries=2 --retry-connrefused --waitretry=5 ${CHECK_STACK} -qO- --content-on-error --header='authority: ios.chat.openai.com' --header='accept: */*;q=0.8,application/signed-exchange;v=b3;q=0.7' --header='accept-language: en-US,en;q=0.9' --header="sec-ch-ua: ${UA_SEC_CH_UA}" --header='sec-ch-ua-mobile: ?0' --header='sec-ch-ua-platform: "Windows"' --header='sec-fetch-dest: document' --header='sec-fetch-mode: navigate' --header='sec-fetch-site: none' --header='sec-fetch-user: ?1' --header='upgrade-insecure-requests: 1' --user-agent="${UA_BROWSER}" https://ios.chat.openai.com/)
+-
+-  [ -z "$CHECK_RESULT2" ] && grep -qw is_ciphers <<< "$IS_CIPHERS" && local CHECK_RESULT2=$(wget --timeout=2 --tries=2 --retry-connrefused --waitretry=5 ${CHECK_STACK} --ciphers=DEFAULT@SECLEVEL=1 --no-check-certificate -qO- --content-on-error --header='authority: ios.chat.openai.com' --header='accept: */*;q=0.8,application/signed-exchange;v=b3;q=0.7' --header='accept-language: en-US,en;q=0.9' --header="sec-ch-ua: ${UA_SEC_CH_UA}" --header='sec-ch-ua-mobile: ?0' --header='sec-ch-ua-platform: "Windows"' --header='sec-fetch-dest: document' --header='sec-fetch-mode: navigate' --header='sec-fetch-site: none' --header='sec-fetch-user: ?1' --header='upgrade-insecure-requests: 1' --user-agent="${UA_BROWSER}" https://ios.chat.openai.com/)
+-
+-  if [ -z "$CHECK_RESULT2" ] || grep -qi 'VPN' <<< "$CHECK_RESULT2"; then
+-    echo "ban"
+-  else
+-    echo "unlock"
+-  fi
++  echo "unlock"
++  return 0
+ }
+ 
+ # 脚本当天及累计运行次数统计
++# Safe edition: disabled telemetry/reporting to third-party stat endpoint.
+ statistics_of_run-times() {
+-  local UPDATE_OR_GET=$1
+-  local SCRIPT=$2
+-  if grep -q 'update' <<< "$UPDATE_OR_GET"; then
+-    { wget --no-check-certificate -qO- --timeout=3 "https://stat.cloudflare.now.cc/updateStats?script=${SCRIPT}" > $TEMP_DIR/statistics 2>/dev/null || true; }&
+-  elif grep -q 'get' <<< "$UPDATE_OR_GET"; then
+-    [ -s $TEMP_DIR/statistics ] && [[ $(cat $TEMP_DIR/statistics) =~ \"todayCount\":([0-9]+),\"totalCount\":([0-9]+) ]] && local TODAY="${BASH_REMATCH[1]}" && local TOTAL="${BASH_REMATCH[2]}" && rm -f $TEMP_DIR/statistics
+-    hint "\n*******************************************\n\n $(text 55) \n"
+-  fi
++  return 0
+ }
+ 
+ # 从 inbound.json 实时解析已安装协议列表，grep pattern 由 NODE_TAG 数组自动构建
+@@ -506,17 +431,17 @@
+   fi
+ 
+   {
+-    wget --no-check-certificate --continue -qO $TEMP_DIR/clash ${GH_PROXY}${SUBSCRIBE_TEMPLATE}/clash 2>/dev/null &
+-    wget --no-check-certificate --continue -qO $TEMP_DIR/sing-box ${GH_PROXY}${SUBSCRIBE_TEMPLATE}/sing-box 2>/dev/null &
++    wget --continue -qO $TEMP_DIR/clash ${GH_PROXY}${SUBSCRIBE_TEMPLATE}/clash 2>/dev/null &
++    wget --continue -qO $TEMP_DIR/sing-box ${GH_PROXY}${SUBSCRIBE_TEMPLATE}/sing-box 2>/dev/null &
+     wait
+   } &
+ 
+   mapfile -t CURRENT_PROTOCOLS < <(get_installed_protocols)
+ 
+-  [[ ${STATUS[0]} = "$(text 26)" ]] && [ ! -s $WORK_DIR/cloudflared ] && { wget --no-check-certificate -qO $TEMP_DIR/cloudflared ${GH_PROXY}https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARGO_ARCH >/dev/null 2>&1 && chmod +x $TEMP_DIR/cloudflared >/dev/null 2>&1; }&
+-  [[ ${STATUS[1]} = "$(text 26)" ]] && [ ! -s $WORK_DIR/xray ] && { wget --no-check-certificate -qO $TEMP_DIR/Xray.zip ${GH_PROXY}https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-$XRAY_ARCH.zip >/dev/null 2>&1; unzip -qo $TEMP_DIR/Xray.zip xray *.dat -d $TEMP_DIR >/dev/null 2>&1; }&
+-  [ ! -s $WORK_DIR/jq ] && { wget --no-check-certificate --continue -qO $TEMP_DIR/jq ${GH_PROXY}https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-$JQ_ARCH >/dev/null 2>&1 && chmod +x $TEMP_DIR/jq >/dev/null 2>&1; }&
+-  [ ! -s $WORK_DIR/qrencode ] && { wget --no-check-certificate --continue -qO $TEMP_DIR/qrencode ${GH_PROXY}https://github.com/fscarmen/client_template/raw/main/qrencode-go/qrencode-go-linux-$QRENCODE_ARCH >/dev/null 2>&1 && chmod +x $TEMP_DIR/qrencode >/dev/null 2>&1; }&
++  [[ ${STATUS[0]} = "$(text 26)" ]] && [ ! -s $WORK_DIR/cloudflared ] && { wget -qO $TEMP_DIR/cloudflared ${GH_PROXY}https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARGO_ARCH >/dev/null 2>&1 && chmod +x $TEMP_DIR/cloudflared >/dev/null 2>&1; }&
++  [[ ${STATUS[1]} = "$(text 26)" ]] && [ ! -s $WORK_DIR/xray ] && { wget -qO $TEMP_DIR/Xray.zip ${GH_PROXY}https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-$XRAY_ARCH.zip >/dev/null 2>&1; unzip -qo $TEMP_DIR/Xray.zip xray *.dat -d $TEMP_DIR >/dev/null 2>&1; }&
++  [ ! -s $WORK_DIR/jq ] && { wget --continue -qO $TEMP_DIR/jq ${GH_PROXY}https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-$JQ_ARCH >/dev/null 2>&1 && chmod +x $TEMP_DIR/jq >/dev/null 2>&1; }&
++  [ ! -s $WORK_DIR/qrencode ] && { wget --continue -qO $TEMP_DIR/qrencode ${GH_PROXY}https://github.com/fscarmen/client_template/raw/main/qrencode-go/qrencode-go-linux-$QRENCODE_ARCH >/dev/null 2>&1 && chmod +x $TEMP_DIR/qrencode >/dev/null 2>&1; }&
+ }
+ 
+ # 为了适配 alpine，定义 cmd_systemctl 的函数
+@@ -645,12 +570,12 @@
+   fi
+ 
+   {
+-    local IP4_JSON=$(wget $BIND_ADDRESS4 -4 -qO- --no-check-certificate --tries=2 --timeout=2 https://ip.cloudflare.now.cc${IS_CHINESE})
++    local IP4_JSON=$(wget $BIND_ADDRESS4 -4 -qO- --tries=2 --timeout=2 https://ip.cloudflare.now.cc${IS_CHINESE})
+     [ -n "$IP4_JSON" ] && echo "$IP4_JSON" > $TEMP_DIR/ip4.json
+   }&
+ 
+   {
+-    local IP6_JSON=$(wget $BIND_ADDRESS6 -6 -qO- --no-check-certificate --tries=2 --timeout=2 https://ip.cloudflare.now.cc${IS_CHINESE})
++    local IP6_JSON=$(wget $BIND_ADDRESS6 -6 -qO- --tries=2 --timeout=2 https://ip.cloudflare.now.cc${IS_CHINESE})
+     [ -n "$IP6_JSON" ] && echo "$IP6_JSON" > $TEMP_DIR/ip6.json
+   }&
+ 
+@@ -938,12 +863,7 @@
+           fi
+         fi
+ 
+-        # 方法 1 失败，尝试方法 2：远程 API
+-        if [ -z "$REALITY_PUBLIC" ]; then
+-          REALITY_PUBLIC=$(wget --no-check-certificate -qO- --tries=3 --timeout=2 \
+-            "https://realitykey.cloudflare.now.cc/?privateKey=$REALITY_PRIVATE" \
+-            | awk -F '"' '/publicKey/{print $4}')
+-        fi
++        # Safe edition: remote Reality public-key API disabled; never send private key to third party.
+ 
+         # 都失败，生成随机密钥对
+         if [ -z "$REALITY_PUBLIC" ]; then
+@@ -2159,7 +2079,7 @@
+     fi
+   }
+ 
+-  local ZONE_RESPONSE=$(wget --no-check-certificate -qO- --content-on-error \
++  local ZONE_RESPONSE=$(wget -qO- --content-on-error \
+     --header="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+     --header="Content-Type: application/json" \
+     "https://api.cloudflare.com/client/v4/zones?name=${ROOT_DOMAIN}")
+@@ -2169,7 +2089,7 @@
+   [[ "$ZONE_RESPONSE" =~ \"id\":\"([^\"]+)\".*\"account\":\{\"id\":\"([^\"]+)\" ]] && local ZONE_ID="${BASH_REMATCH[1]}" ACCOUNT_ID="${BASH_REMATCH[2]}" || \
+   return 5
+ 
+-  local TUNNEL_LIST=$(wget --no-check-certificate -qO- --content-on-error \
++  local TUNNEL_LIST=$(wget -qO- --content-on-error \
+     --header="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+     --header="Content-Type: application/json" \
+     "https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/cfd_tunnel?is_deleted=false")
+@@ -2203,7 +2123,7 @@
+   if [ -z "$EXISTING_TUNNEL_ID" ]; then
+     local TUNNEL_SECRET=$(openssl rand -base64 32)
+ 
+-    local CREATE_RESPONSE=$(wget --no-check-certificate -qO- --content-on-error \
++    local CREATE_RESPONSE=$(wget -qO- --content-on-error \
+       --header="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+       --header="Content-Type: application/json" \
+       --post-data="{
+@@ -2232,7 +2152,7 @@
+     return 5
+   fi
+ 
+-  local CONFIG_RESPONSE=$(wget --no-check-certificate -qO- --content-on-error \
++  local CONFIG_RESPONSE=$(wget -qO- --content-on-error \
+     --method=PUT \
+     --header="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+     --header="Content-Type: application/json" \
+@@ -2266,7 +2186,7 @@
+     }
+   }"
+ 
+-  local DNS_LIST=$(wget --no-check-certificate -qO- --content-on-error \
++  local DNS_LIST=$(wget -qO- --content-on-error \
+     --header="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+     --header="Content-Type: application/json" \
+     "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?type=CNAME&name=${ARGO_DOMAIN}")
+@@ -2277,7 +2197,7 @@
+     local EXISTING_DNS_ID="${BASH_REMATCH[1]}" EXISTED_DNS_CONTENT="${BASH_REMATCH[2]}"
+ 
+     if ! grep -qw "$EXISTING_TUNNEL_ID" <<< "${EXISTED_DNS_CONTENT%%.*}"; then
+-      local DNS_RESPONSE=$(wget --no-check-certificate -qO- --content-on-error \
++      local DNS_RESPONSE=$(wget -qO- --content-on-error \
+         --method=PATCH \
+         --header="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+         --header="Content-Type: application/json" \
+@@ -2287,7 +2207,7 @@
+       api_error "$DNS_RESPONSE" || return $?
+     fi
+   else
+-    local DNS_RESPONSE=$(wget --no-check-certificate -qO- --content-on-error \
++    local DNS_RESPONSE=$(wget -qO- --content-on-error \
+       --method=POST \
+       --header="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+       --header="Content-Type: application/json" \
+@@ -3062,7 +2982,7 @@
+   cat > $WORK_DIR/ax.sh << EOF
+ #!/usr/bin/env bash
+ 
+-bash <(wget --no-check-certificate -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen/argox/main/argox.sh) \$1
++bash /usr/bin/argox \$1
+ EOF
+   chmod +x $WORK_DIR/ax.sh
+   ln -sf $WORK_DIR/ax.sh /usr/bin/argox
+@@ -3246,7 +3166,7 @@
+ 
+   # 写入订阅文件
+   echo -e "$CLASH" > $WORK_DIR/subscribe/proxies
+-  wget --no-check-certificate -qO- --tries=3 --timeout=2 ${SUBSCRIBE_TEMPLATE}/clash | sed "s#NODE_NAME#${NODE_NAME}#g; s#PROXY_PROVIDERS_URL#http://${ARGO_DOMAIN}/${UUID}/proxies#" > $WORK_DIR/subscribe/clash
++  wget -qO- --tries=3 --timeout=2 ${SUBSCRIBE_TEMPLATE}/clash | sed "s#NODE_NAME#${NODE_NAME}#g; s#PROXY_PROVIDERS_URL#http://${ARGO_DOMAIN}/${UUID}/proxies#" > $WORK_DIR/subscribe/clash
+   echo -n "$SR_SUBSCRIBE" | sed -E '/^[ ]*#|^--/d' | sed '/^$/d' | base64 -w0 > $WORK_DIR/subscribe/shadowrocket
+   echo -n "$V2N_SUBSCRIBE" | sed -E '/^[ ]*#|^--/d' | sed '/^$/d' | base64 -w0 > $WORK_DIR/subscribe/base64
+ 
+@@ -3254,7 +3174,7 @@
+   local SB_DISPLAY='' SB_BLOCK='' SB_LINK_BLOCK=''
+   if ! grep -Eq '^[[:space:]]*(xhttp-h1\.1-cdn|xhttp-h3-direct)[[:space:]]*$' <<< "$PROTOS_NOW" || grep -Eq '(^|[[:space:]])(reality-vision|hysteria2|reality-grpc|vless-ws|vmess-ws|trojan-ws|ss-ws|trojan-direct|ss2022-direct)([[:space:]]|$)' <<< "$PROTOS_NOW"; then
+     if [ -n "$SB_OUTBOUNDS" ]; then
+-    local SING_BOX_JSON=$(wget --no-check-certificate -qO- --tries=3 --timeout=2 ${SUBSCRIBE_TEMPLATE}/sing-box)
++    local SING_BOX_JSON=$(wget -qO- --tries=3 --timeout=2 ${SUBSCRIBE_TEMPLATE}/sing-box)
+     echo "$SING_BOX_JSON" | sed "s#\"<OUTBOUND_REPLACE>\"#${SB_OUTBOUNDS}#; s#\"<NODE_REPLACE>\"#${SB_TAGS}#g" | $WORK_DIR/jq > $WORK_DIR/subscribe/sing-box
+     SB_DISPLAY=$(echo "{ \"outbounds\":[ ${SB_OUTBOUNDS} ] }" | $WORK_DIR/jq 2>/dev/null)
+     SB_BLOCK="
+@@ -4069,13 +3989,13 @@
+ 
+ # Argo 与 Xray 的最新版本
+ version() {
+-  local ONLINE=$(wget --no-check-certificate -qO- "${GH_PROXY}https://api.github.com/repos/cloudflare/cloudflared/releases/latest" | grep "tag_name" | cut -d \" -f4)
++  local ONLINE=$(wget -qO- "${GH_PROXY}https://api.github.com/repos/cloudflare/cloudflared/releases/latest" | grep "tag_name" | cut -d \" -f4)
+   [ -z "$ONLINE" ] && error " $(text 74) "
+   local LOCAL=$($WORK_DIR/cloudflared -v | awk '{for (i=0; i<NF; i++) if ($i=="version") {print $(i+1)}}')
+   local APP=ARGO && info "\n $(text 43) "
+   [[ -n "$ONLINE" && "$ONLINE" != "$LOCAL" ]] && reading "\n $(text 9) " UPDATE[0] || info " $(text 44) "
+ 
+-  ONLINE=$(wget --no-check-certificate -qO- "${GH_PROXY}https://api.github.com/repos/XTLS/Xray-core/releases/latest" | grep "tag_name" | sed "s@.*\"v\(.*\)\",@\1@g")
++  ONLINE=$(wget -qO- "${GH_PROXY}https://api.github.com/repos/XTLS/Xray-core/releases/latest" | grep "tag_name" | sed "s@.*\"v\(.*\)\",@\1@g")
+   [ -z "$ONLINE" ] && error " $(text 74) "
+   LOCAL=$($WORK_DIR/xray version | awk '{for (i=0; i<NF; i++) if ($i=="Xray") {print $(i+1)}}')
+   local APP=Xray && info "\n $(text 43) "
+@@ -4083,7 +4003,7 @@
+ 
+   [[ "${UPDATE[*],,}" =~ y ]] && check_system_info
+   if [ "${UPDATE[0],,}" = 'y' ]; then
+-    wget --no-check-certificate -O $TEMP_DIR/cloudflared ${GH_PROXY}https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARGO_ARCH
++    wget -O $TEMP_DIR/cloudflared ${GH_PROXY}https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARGO_ARCH
+     if [ -s $TEMP_DIR/cloudflared ]; then
+       cmd_systemctl disable argo
+       chmod +x $TEMP_DIR/cloudflared && mv $TEMP_DIR/cloudflared $WORK_DIR/cloudflared
+@@ -4094,7 +4014,7 @@
+     fi
+   fi
+   if [ "${UPDATE[1],,}" = 'y' ]; then
+-    wget --no-check-certificate -O $TEMP_DIR/Xray-linux-$XRAY_ARCH.zip ${GH_PROXY}https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-$XRAY_ARCH.zip
++    wget -O $TEMP_DIR/Xray-linux-$XRAY_ARCH.zip ${GH_PROXY}https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-$XRAY_ARCH.zip
+     if [ -s $TEMP_DIR/Xray-linux-$XRAY_ARCH.zip ]; then
+       cmd_systemctl disable xray
+       unzip -qo $TEMP_DIR/Xray-linux-$XRAY_ARCH.zip xray *.dat -d $WORK_DIR; rm -f $TEMP_DIR/Xray*.zip
+@@ -4174,10 +4094,10 @@
+     ACTION[5]() { change_config; exit; }
+     ACTION[6]() { change_protocols; exit; }
+     ACTION[7]() { version; exit; }
+-    ACTION[8]() { bash <(wget --no-check-certificate -qO- ${GH_PROXY}https://raw.githubusercontent.com/ylx2016/Linux-NetSpeed/master/tcp.sh); exit; }
++    ACTION[8]() { warning " Safe edition: remote third-party script execution is disabled."; exit; }
+     ACTION[9]() { uninstall; exit; }
+-    ACTION[10]() { bash <(wget --no-check-certificate -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-box.sh) -$L; exit; }
+-    ACTION[11]() { bash <(wget --no-check-certificate -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen/sba/main/sba.sh) -$L; exit; }
++    ACTION[10]() { warning " Safe edition: remote third-party script execution is disabled."; exit; }
++    ACTION[11]() { warning " Safe edition: remote third-party script execution is disabled."; exit; }
+ 
+   else
+     OPTION[1]="1.  $(text 77)"
+@@ -4188,9 +4108,9 @@
+ 
+     ACTION[1]() { NONINTERACTIVE_INSTALL='noninteractive_install'; fast_install_variables; install_argox; export_list; create_shortcut; exit;}
+     ACTION[2]() { install_argox; export_list; create_shortcut; exit; }
+-    ACTION[3]() { bash <(wget --no-check-certificate -qO- ${GH_PROXY}https://raw.githubusercontent.com/ylx2016/Linux-NetSpeed/master/tcp.sh); exit; }
+-    ACTION[4]() { bash <(wget --no-check-certificate -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-box.sh) -$L; exit; }
+-    ACTION[5]() { bash <(wget --no-check-certificate -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen/sba/main/sba.sh) -$L; exit; }
++    ACTION[3]() { warning " Safe edition: remote third-party script execution is disabled."; exit; }
++    ACTION[4]() { warning " Safe edition: remote third-party script execution is disabled."; exit; }
++    ACTION[5]() { warning " Safe edition: remote third-party script execution is disabled."; exit; }
+   fi
+ 
+   [ "${#OPTION[@]}" -ge '10' ] && OPTION[0]="0 .  $(text 35)" || OPTION[0]="0.  $(text 35)"
+@@ -4275,7 +4195,7 @@
+     u ) select_language; check_system_info; uninstall; exit 0;;
+     n ) select_language; check_system_info; export_list; exit 0 ;;
+     v ) select_language; check_system_info; check_arch; version; exit 0;;
+-    b ) select_language; bash <(wget --no-check-certificate -qO- "${GH_PROXY}https://raw.githubusercontent.com/ylx2016/Linux-NetSpeed/master/tcp.sh"); exit ;;
++    b ) select_language; warning " Safe edition: remote third-party script execution is disabled."; exit ;;
+     f ) NONINTERACTIVE_INSTALL='noninteractive_install'; VARIABLE_FILE=$OPTARG; . $VARIABLE_FILE ;;
+     k|l ) NONINTERACTIVE_INSTALL='noninteractive_install'; fast_install_variables ;;
+   esac
+@@ -4302,7 +4222,7 @@
+     read -t 1 -s -r -n1 _compat_key && break
+   done
+   echo ""
+-  bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/ArgoX/70ad14d282d63c6b8359e9d75224ab5012d2785a/argox.sh) "$@"
++  error " Safe edition: legacy remote downgrade is disabled. Please reinstall with this local safe script."
+   exit $?
+ fi
+ 
