@@ -1300,6 +1300,44 @@ fetch_tunnel_domain() {
   fi
 }
 
+
+# 保存 trycloudflare 临时域名到本地文件（安全：只写本机，不外发）
+install_trycloudflare_url_watcher() {
+  cat > ${WORK_DIR}/argox-url-watch.sh << 'EOF'
+#!/usr/bin/env bash
+set -u
+WORK_DIR="/etc/argox"
+OUT_FILE="${WORK_DIR}/current_tunnel.txt"
+LOG_FILE="${WORK_DIR}/argo.log"
+URL=""
+
+for i in $(seq 1 60); do
+  CF_PID=$(ps -eo pid,args | awk -v d="$WORK_DIR" '$0~(d"/cloudflared"){print $1;exit}')
+  if [[ "$CF_PID" =~ ^[0-9]+$ ]]; then
+    METRICS_ADDR=$(ss -nltp 2>/dev/null | awk -v pid="$CF_PID" '$0 ~ "pid="pid"," {print $4; exit}' | sed 's/^\*/127.0.0.1/; s/^0\.0\.0\.0/127.0.0.1/')
+    if [ -n "${METRICS_ADDR:-}" ]; then
+      URL=$(wget -qO- "http://${METRICS_ADDR}/quicktunnel" 2>/dev/null | grep -Eo 'https://[-a-zA-Z0-9.]+\.trycloudflare\.com' | head -1 || true)
+    fi
+  fi
+
+  if [ -z "${URL:-}" ] && [ -s "$LOG_FILE" ]; then
+    URL=$(grep -Eo 'https://[-a-zA-Z0-9.]+\.trycloudflare\.com' "$LOG_FILE" | tail -1 || true)
+  fi
+
+  if [[ "${URL:-}" =~ trycloudflare\.com$ ]]; then
+    umask 077
+    echo "$URL" > "$OUT_FILE"
+    chmod 600 "$OUT_FILE" 2>/dev/null || true
+    logger -t argox "current trycloudflare url saved to ${OUT_FILE}: ${URL}" 2>/dev/null || true
+    exit 0
+  fi
+  sleep 2
+done
+exit 1
+EOF
+  chmod +x ${WORK_DIR}/argox-url-watch.sh
+}
+
 # 检查并安装 nginx
 # 生成100年自签证书（供 Hysteria2 使用）
 ssl_certificate() {
@@ -2247,6 +2285,7 @@ install_argox() {
 
   [ ! -d /etc/systemd/system ] && mkdir -p /etc/systemd/system
   mkdir -p $WORK_DIR/subscribe
+  install_trycloudflare_url_watcher
   [ "$L" = 'C' ] && write_custom 'language' 'Chinese' || write_custom 'language' 'English'
   write_custom 'serverIp' "${SERVER_IP}"
   write_custom 'privateKey' "${REALITY_PRIVATE:-__KEY_UNSET__}"
@@ -2295,6 +2334,13 @@ depend() {
 start_pre() {
     mkdir -p ${WORK_DIR} /run
     rm -f "\$pidfile"
+}
+
+start_post() {
+    if echo "${ARGO_RUNS}" | grep -q -- "--url http://localhost"; then
+        ${WORK_DIR}/argox-url-watch.sh >/dev/null 2>&1 &
+    fi
+    return 0
 }
 
 stop() {
@@ -2380,7 +2426,10 @@ TimeoutStartSec=0"
     ARGO_SERVER+="
 ExecStart=$ARGO_RUNS
 Restart=on-failure
-RestartSec=5s
+RestartSec=5s"
+    [[ "$ARGO_RUNS" == *"--url http://localhost"* ]] && ARGO_SERVER+="
+ExecStartPost=/bin/bash -c '${WORK_DIR}/argox-url-watch.sh >/dev/null 2>&1 &'"
+    ARGO_SERVER+="
 
 [Install]
 WantedBy=multi-user.target"
@@ -3265,7 +3314,7 @@ $(info " $(text 66):
 ${_SUB_SCHEME}://${ARGO_DOMAIN}/${UUID}/auto
 
  $(text 64) QRcode:
-https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${_SUB_SCHEME}://${ARGO_DOMAIN}/${UUID}/auto")
+Safe edition: online QR service disabled. Use local terminal QR below.")
 
 $($WORK_DIR/qrencode ${_SUB_SCHEME}://${ARGO_DOMAIN}/${UUID}/auto)
 "
