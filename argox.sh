@@ -3,7 +3,6 @@
 # 当前脚本版本号
 VERSION='2.0.6-safe3-stable (2026.04.20, security-hardened, stable WS default)'
 
-# Github 反代加速代理
 # Safe edition: third-party GitHub proxy disabled to reduce supply-chain risk
 GITHUB_PROXY=()
 
@@ -96,7 +95,7 @@ C[23]="虚拟化"
 E[24]="Choose:"
 C[24]="请选择:"
 E[25]="Curren architecture \$(uname -m) is not supported. Feedback: [https://github.com/fscarmen/argox/issues]"
-C[25]="当前架构 \$(uname -m) 暂不支持,问题反馈:[https://github.com/fscarmen/argox/issues]"
+C[25]="当前架构 \$(uname -m) 暂不支持,问题反馈:[https://github.com/hkzping999/ArgoX]"
 E[26]="Not install"
 C[26]="未安装"
 E[27]="close"
@@ -136,19 +135,19 @@ C[43]="\${APP} 本地版本: \${LOCAL}.\\\t 最新版本: \${ONLINE}"
 E[44]="No upgrade required."
 C[44]="不需要升级"
 E[45]="Argo authentication message does not match the rules, neither Token nor Json, script exits. Feedback:[https://github.com/fscarmen/argox/issues]"
-C[45]="Argo 认证信息不符合规则，既不是 Token，也是不是 Json，脚本退出，问题反馈:[https://github.com/fscarmen/argox/issues]"
+C[45]="Argo 认证信息不符合规则，既不是 Token，也是不是 Json，脚本退出，问题反馈:[https://github.com/hkzping999/ArgoX/issues]"
 E[46]="Connect"
 C[46]="连接"
-E[47]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback:[https://github.com/fscarmen/argox/issues]"
-C[47]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/argox/issues]"
-E[48]="Downloading the latest version \${APP} failed, script exits. Feedback:[https://github.com/fscarmen/argox/issues]"
-C[48]="下载最新版本 \${APP} 失败，脚本退出，问题反馈:[https://github.com/fscarmen/argox/issues]"
+E[47]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback:[https://github.com/hkzping999/ArgoX/issues]"
+C[47]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/hkzping999/ArgoX/issues]"
+E[48]="Downloading the latest version \${APP} failed, script exits. Feedback:[https://github.com/hkzping999/ArgoX/issues]"
+C[48]="下载最新版本 \${APP} 失败，脚本退出，问题反馈:[https://github.com/hkzping999/ArgoX/issues]"
 E[49]="(\${STEP_NUM}/\${TOTAL_STEPS}) Please enter the node name. (Default is \${NODE_NAME_DEFAULT}):"
 C[49]="(\${STEP_NUM}/\${TOTAL_STEPS}) 请输入节点名称 (默认为 \${NODE_NAME_DEFAULT}):"
 E[50]="\${APP[*]} services are not enabled, node information cannot be output. Press [y] if you want to open."
 C[50]="\${APP[*]} 服务未开启，不能输出节点信息。如需打开请按 [y]: "
-E[51]="Install Sing-box multi-protocol scripts [https://github.com/fscarmen/sing-box]"
-C[51]="安装 Sing-box 协议全家桶脚本 [https://github.com/fscarmen/sing-box]"
+E[51]="Install Sing-box multi-protocol scripts [https://github.com/hkzping999/sing-box]"
+C[51]="安装 Sing-box 协议全家桶脚本 [hhttps://github.com/hkzping999/sing-box]"
 E[52]="Memory Usage"
 C[52]="内存占用"
 E[53]="The xray service is detected to be installed. Script exits."
